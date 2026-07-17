@@ -35,11 +35,20 @@ python hunter.py johndoe --timeout 10 --workers 30
 
 Each site in `sites.json` has a URL template and a detection method:
 
-- **`status`** — a `200 OK` on `https://site.com/{username}` means the profile exists.
+- **`status`** — adaptive check. First tries the profile URL; if it returns
+  `200 OK`, it also probes a random impossible username as a *control*. If the
+  control 404s but the real one is 200, it's a reliable hit. If both return 200
+  (a "soft 404" site), it compares the redirect destination and page body to
+  decide. This is what kills most false positives.
 - **`error`** — the page always returns 200, so presence is decided by whether a
-  known "user not found" string is absent from the page body.
+  known "user not found" string is **absent** from the body.
+- **`presence`** — the opposite: presence is decided by whether a distinctive
+  "this profile exists" string (`successText`) is **present** (e.g. Telegram's
+  profile-photo element, Pinterest's `- Profile | Pinterest` title).
 
-Checks run concurrently with a thread pool for speed.
+Results are tagged by confidence: `[+]` = high confidence, `[?]` = likely
+(decided by the soft-404 content heuristic). Checks run concurrently with a
+thread pool for speed.
 
 ## Adding more sites
 

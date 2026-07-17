@@ -14,10 +14,12 @@ Usage:
 
 import argparse
 import concurrent.futures
+import difflib
 import json
 import os
 import sys
 import time
+import uuid
 
 import requests
 
@@ -41,37 +43,99 @@ def load_sites(path):
         return json.load(fh)
 
 
+def _fetch(url, timeout):
+    """GET a URL, returning the response or None on any network error."""
+    try:
+        return requests.get(url, headers=HEADERS, timeout=timeout, allow_redirects=True)
+    except requests.exceptions.RequestException:
+        return None
+
+
+def _normalize(text, token):
+    """
+    Prepare a page body for comparison: lowercase, drop the username token so
+    two pages differ only by their real structure, and trim for speed.
+    """
+    return text.lower().replace(token.lower(), "")[:4000]
+
+
 def check_site(name, info, username, timeout):
     """
-    Check a single site for the username.
+    Check a single site for the username using adaptive detection.
 
-    Returns a dict describing the result:
-        status = "found" | "not_found" | "error"
+    Strategy (in order of reliability):
+      1. Explicit `errorText` in sites.json  -> most reliable.
+      2. Control probe: request a random username that cannot exist. Comparing
+         the real response against this control removes "soft 404" false
+         positives (sites that return 200 OK for everything).
+
+    Returns a dict with status = "found" | "not_found" | "error" and a
+    `confidence` = "high" | "medium".
     """
     url = info["url"].format(username)
-    try:
-        resp = requests.get(
-            url, headers=HEADERS, timeout=timeout, allow_redirects=True
-        )
-    except requests.exceptions.RequestException as exc:
-        return {"site": name, "url": url, "status": "error", "detail": str(exc)}
+    resp = _fetch(url, timeout)
+    if resp is None:
+        return {"site": name, "url": url, "status": "error", "detail": "request failed"}
 
     check_type = info.get("check", "status")
 
-    if check_type == "status":
-        # A 200 OK generally means the profile page exists.
-        found = resp.status_code == 200
-    elif check_type == "error":
-        # The page always returns 200; presence is decided by an error string.
+    # 1a) Explicit "not found" string -> highly reliable (needs a normal page).
+    if check_type == "error" and "errorText" in info:
+        if resp.status_code != 200:
+            # e.g. HTTP 429 rate-limit: we can't trust the body, so don't guess.
+            return {"site": name, "url": url, "status": "error",
+                    "detail": f"HTTP {resp.status_code}"}
         found = info["errorText"] not in resp.text
-    else:
-        found = False
+        return _result(name, url, found, "high", resp.status_code)
 
+    # 1b) Explicit "exists" marker -> for sites that 200 for everyone but show a
+    #     distinctive string only on real profiles (e.g. Telegram, Pinterest).
+    if check_type == "presence" and "successText" in info:
+        if resp.status_code != 200:
+            return _result(name, url, False, "high", resp.status_code)
+        found = info["successText"] in resp.text
+        return _result(name, url, found, "high", resp.status_code)
+
+    # If the profile page itself isn't OK, the account almost certainly doesn't exist.
+    if resp.status_code != 200:
+        return _result(name, url, False, "high", resp.status_code)
+
+    # 2) Control probe with an impossible username.
+    control_name = "no" + uuid.uuid4().hex[:16]
+    control = _fetch(info["url"].format(control_name), timeout)
+
+    # Control request failed -> fall back to plain status (best effort).
+    if control is None:
+        return _result(name, url, True, "medium", resp.status_code)
+
+    # Site returns 404 for the fake user but 200 for ours -> reliable hit.
+    if control.status_code != 200:
+        return _result(name, url, True, "high", resp.status_code)
+
+    # Both return 200 -> "soft 404" site. Use extra signals.
+    # Signal A: did the real request stay on the username's URL, or redirect
+    # away to a login/home page (as non-existent profiles usually do)?
+    redirected_away = username.lower() not in resp.url.lower()
+    control_same_dest = resp.url.lower() == control.url.lower()
+    if redirected_away or control_same_dest:
+        return _result(name, url, False, "high", resp.status_code)
+
+    # Signal B: compare page bodies. A real profile differs from the generic
+    # "no such user" template; a missing profile looks nearly identical to it.
+    ratio = difflib.SequenceMatcher(
+        None, _normalize(control.text, control_name), _normalize(resp.text, username)
+    ).ratio()
+    found = ratio < 0.90
+    return _result(name, url, found, "medium", resp.status_code)
+
+
+def _result(name, url, found, confidence, code):
     return {
         "site": name,
         "url": url,
         "status": "found" if found else "not_found",
-        "code": resp.status_code,
+        "confidence": confidence,
+        "code": code,
     }
 
 
@@ -96,7 +160,10 @@ def print_results(username, results, found_only):
     for r in results:
         if r["status"] == "found":
             found_count += 1
-            print(f"  {GREEN}[+]{RESET} {r['site']:<14} {r['url']}")
+            # Mark lower-confidence (soft-404 heuristic) hits with a '?'.
+            tag = f"{GREEN}[+]{RESET}" if r.get("confidence") == "high" else f"{YELLOW}[?]{RESET}"
+            note = "" if r.get("confidence") == "high" else f" {DIM}(likely){RESET}"
+            print(f"  {tag} {r['site']:<14} {r['url']}{note}")
         elif found_only:
             continue
         elif r["status"] == "error":
