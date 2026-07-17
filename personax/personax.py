@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Username Hunter - a Sherlock-style OSINT tool.
+PersonaX - a Sherlock-style OSINT tool.
 
-Searches for a given username across many websites and reports where a
-matching public profile exists. Useful for checking your OWN digital
-footprint or for authorized OSINT research.
+Find anyone's digital footprint. Searches for a given username across many
+websites and reports where a matching public profile exists. Useful for
+checking your OWN footprint or for authorized OSINT research.
 
 Usage:
-    python hunter.py <username> [username2 ...]
-    python hunter.py johndoe --timeout 8 --output results.txt
-    python hunter.py johndoe --found-only
+    python personax.py <username> [username2 ...]
+    python personax.py johndoe --timeout 8 --output results.txt
+    python personax.py johndoe --found-only
 """
 
 import argparse
@@ -185,7 +185,8 @@ def save_results(path, username, results):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Hunt for a username across many websites (Sherlock-style)."
+        prog="personax",
+        description="PersonaX - find anyone's digital footprint across many websites.",
     )
     parser.add_argument("usernames", nargs="+", help="One or more usernames to search.")
     parser.add_argument("--timeout", type=float, default=8.0, help="Per-site timeout in seconds (default 8).")
@@ -201,7 +202,7 @@ def main():
     sites_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sites.json")
     sites = load_sites(sites_path)
 
-    print(f"{CYAN}Username Hunter{RESET} - checking {len(sites)} sites per username")
+    print(f"{CYAN}PersonaX{RESET} - checking {len(sites)} sites per username")
     print(f"{DIM}Use responsibly: research your own footprint or authorized targets only.{RESET}")
 
     for username in args.usernames:

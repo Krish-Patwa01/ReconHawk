@@ -1,6 +1,8 @@
-# Username Hunter
+# PersonaX
 
-A Sherlock-style OSINT tool that hunts for a username across ~35 websites and
+**Find anyone's digital footprint.**
+
+A Sherlock-style OSINT tool that hunts for a username across ~60 websites and
 reports where a matching public profile exists.
 
 Useful for checking **your own** digital footprint or for **authorized** OSINT
@@ -15,11 +17,11 @@ pip install -r requirements.txt
 ## Usage
 
 ```bash
-python hunter.py johndoe
-python hunter.py alice bob charlie          # check several usernames
-python hunter.py johndoe --found-only        # only show hits
-python hunter.py johndoe --output results.txt
-python hunter.py johndoe --timeout 10 --workers 30
+python personax.py johndoe
+python personax.py alice bob charlie          # check several usernames
+python personax.py johndoe --found-only        # only show hits
+python personax.py johndoe --output results.txt
+python personax.py johndoe --timeout 10 --workers 30
 ```
 
 ### Options
