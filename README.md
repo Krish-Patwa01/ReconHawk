@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🦅 ReconHawk
+<img src="docs/banner.png" alt="ReconHawk — Domain OSINT & Reconnaissance Toolkit" width="100%">
 
-### All-in-One Domain OSINT & Reconnaissance Toolkit
+<br><br>
 
 *Profile any domain from a single interactive menu — WHOIS, DNS, subdomains, SSL, tech-stack and more.*
 **100% free · No API key required.**
