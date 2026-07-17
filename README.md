@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/banner.png" alt="ReconHawk — Domain OSINT & Reconnaissance Toolkit" width="100%">
+<img src="banner.png" alt="ReconHawk — Domain OSINT & Reconnaissance Toolkit" width="100%">
 
 <br><br>
 
